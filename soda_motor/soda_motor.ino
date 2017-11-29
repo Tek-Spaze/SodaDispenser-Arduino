@@ -14,6 +14,7 @@ const unsigned int stepPin = 22;
 const unsigned int dirPin = 24;
 const unsigned int inPin = 5;
 const unsigned int calibPin = 30;
+const unsigned int disp1En = 40;
 
 // Define a stepper and the pins it will use
 AccelStepper stepper(1, stepPin, dirPin);
@@ -26,6 +27,10 @@ void setup()
   pinMode(inPin, INPUT);
   pinMode(13, OUTPUT);
   pinMode(calibPin, INPUT);
+  for(int i = 40; i < 46; i++){
+    pinMode(i, OUTPUT);
+  }
+  
   Serial.begin(115200);
   Serial.println("Booting v.1");
 }
@@ -36,27 +41,27 @@ void setup()
 #define ST_POS   2
 #define ST_RESET 3
 #define ST_IDLE  4
+#define ST_DISP  5
 
-int calibState = ST_INIT;
+
+#define DISPENSERENABLEOFFSET 40
+
+int calibState = ST_IDLE;
+
+int dispenserEn = 0;
 void loop()
 {
   if (Serial.available() > 0) {
     byte incomingByte = Serial.read();
-    if (incomingByte == '1') {
-      digitalWrite(13, HIGH);
-      stepper.runToNewPosition(90);
-      stepper.runToNewPosition(0);
-      digitalWrite(13, LOW);
-    }
-
-    if (incomingByte == 'c') {
-      calibState = ST_INIT;
-    }
+    calibState = ST_INIT;
+    dispenserEn = DISPENSERENABLEOFFSET + incomingByte - '0';
+    Serial.println(dispenserEn);
   }
 
   switch (calibState) {
     case ST_INIT:
       Serial.println("Starting calib...");
+      setEnable(dispenserEn);
       calibState = (digitalRead(calibPin) == HIGH ? ST_POS : ST_NEG);
       break;
 
@@ -66,10 +71,8 @@ void loop()
         calibState = ST_POS;
         stepper.setCurrentPosition(0);
         stepper.runToNewPosition(-10);
-
       }
       stepper.runSpeed();
-
       break;
 
     case ST_POS:
@@ -83,7 +86,15 @@ void loop()
     case ST_RESET:
       stepper.setCurrentPosition(0);
       Serial.println("Calib done");
+      calibState = ST_DISP;
+      break;
+      
+    case ST_DISP:
+      stepper.runToNewPosition(90);
+      stepper.runToNewPosition(0);
+      setDisable(dispenserEn);
       calibState = ST_IDLE;
+
       break;
 
     case ST_IDLE:
@@ -91,4 +102,11 @@ void loop()
   }
 }
 
+void setEnable(int dispPin){
+  digitalWrite(dispPin, HIGH);
+}
+
+void setDisable(int dispPin){
+  digitalWrite(dispPin, LOW);
+}
 
